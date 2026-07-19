@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>发货工作台 - EasyDispatch</title>
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <div class="topbar">
+    <div class="logo"><span class="icon">📦</span>EasyDispatch</div>
+    <div class="nav">
+      <a href="/">首页</a>
+      <a href="/dispatch" class="active">发货工作台</a>
+      <a href="/templates">模板管理</a>
+    </div>
+    <div class="user">用户: Admin</div>
+  </div>
+
+  <div class="banner-offline" id="offlineBanner" style="display:none;">
+    ⚠️ 系统连接断开，请检查网络
+  </div>
+
+  <div class="container">
+    <div class="page-title">🚀 一键发货</div>
+
+    <!-- 1. 收件人邮箱 -->
+    <div class="field">
+      <label>1. 收件人邮箱</label>
+      <input type="email" id="toEmail" placeholder="buyer@taobao.com" autocomplete="off">
+      <div class="hint">直接粘贴买家发来的邮箱地址</div>
+    </div>
+
+    <!-- 2. 选择模板 -->
+    <div class="field">
+      <label>2. 选择商品模板</label>
+      <select id="templateSelect">
+        <option value="">请选择发货商品...</option>
+      </select>
+    </div>
+
+    <!-- 动态提示栏 -->
+    <div id="noticeBar"></div>
+
+    <!-- 发送按钮 -->
+    <button class="btn-primary" id="sendBtn" disabled>立即发送</button>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    let templates = [];
+    let currentTemplate = null;
+
+    async function loadTemplates() {
+      try {
+        templates = await API.get('/api/templates');
+        const sel = document.getElementById('templateSelect');
+        sel.innerHTML = '<option value="">请选择发货商品...</option>';
+        templates.forEach(t => {
+          const opt = document.createElement('option');
+          opt.value = t.id;
+          const tag = t.attachments.length > 0 ? `(含 ${t.attachments.length} 个附件)` : '(无附件)';
+          opt.textContent = `${t.name} ${tag}`;
+          sel.appendChild(opt);
+        });
+        checkBackendHealth();
+      } catch (e) {
+        showToast('模板加载失败: ' + (e.message || '未知错误'), 'error');
+      }
+    }
+
+    function renderNotice() {
+      const bar = document.getElementById('noticeBar');
+      if (!currentTemplate) {
+        bar.innerHTML = '';
+        document.getElementById('sendBtn').disabled = true;
+        return;
+      }
+
+      // 附件丢失检测
+      if (!currentTemplate.attachmentsHealthy) {
+        bar.innerHTML = `
+          <div class="notice error">
+            ⚠️ 警告：关联的附件文件已丢失，请联系管理员
+          </div>`;
+        document.getElementById('sendBtn').disabled = true;
+        return;
+      }
+
+      if (currentTemplate.attachments.length === 0) {
+        bar.innerHTML = `
+          <div class="notice info">
+            ℹ️ 此模板为纯文本通知，无附件
+          </div>`;
+      } else {
+        const filesHtml = currentTemplate.attachments.map(a => `
+          <span class="file-item">
+            ${fileIconEmoji(a.fileType)} ${escapeHtml(a.originalName)} (${humanSize(a.fileSize)})
+          </span>
+        `).join('');
+        bar.innerHTML = `
+          <div class="notice info">
+            ⚠️ 此模板将自动附带发送 ${currentTemplate.attachments.length} 个文件:
+            <div class="file-list">${filesHtml}</div>
+          </div>`;
+      }
+      document.getElementById('sendBtn').disabled = false;
+    }
+
+    function escapeHtml(s) {
+      if (!s) return '';
+      return String(s).replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      })[c]);
+    }
+
+    document.getElementById('templateSelect').addEventListener('change', (e) => {
+      const id = parseInt(e.target.value);
+      currentTemplate = templates.find(t => t.id === id) || null;
+      renderNotice();
+    });
+
+    document.getElementById('toEmail').addEventListener('input', () => {
+      const email = document.getElementById('toEmail').value.trim();
+      const tpl = currentTemplate;
+      const btn = document.getElementById('sendBtn');
+      btn.disabled = !(email && tpl && tpl.attachmentsHealthy);
+    });
+
+    document.getElementById('sendBtn').addEventListener('click', async () => {
+      const toEmail = document.getElementById('toEmail').value.trim();
+      if (!toEmail) { showToast('请输入收件人邮箱', 'error'); return; }
+      if (!currentTemplate) { showToast('请选择发货商品', 'error'); return; }
+
+      const btn = document.getElementById('sendBtn');
+      btn.disabled = true;
+      btn.textContent = '发送中...';
+
+      try {
+        await API.post('/api/dispatch', {
+          toEmail: toEmail,
+          templateId: currentTemplate.id
+        });
+        showToast(`发送成功 → ${toEmail}`, 'success');
+        // 清空邮箱，准备下一单
+        document.getElementById('toEmail').value = '';
+        document.getElementById('templateSelect').value = '';
+        currentTemplate = null;
+        renderNotice();
+        document.getElementById('toEmail').focus();
+      } catch (e) {
+        showToast('发送失败: ' + (e.message || '未知错误'), 'error');
+        btn.disabled = false;
+      } finally {
+        btn.textContent = '立即发送';
+      }
+    });
+
+    // 回车键快速发送
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !document.getElementById('sendBtn').disabled) {
+        document.getElementById('sendBtn').click();
+      }
+    });
+
+    loadTemplates();
+  </script>
+</body>
+</html>

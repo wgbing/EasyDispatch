@@ -1,0 +1,65 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: easy-dispatch
+
+  # H2 内存数据库（原型阶段，可切换 MySQL）
+  datasource:
+    url: jdbc:h2:file:./data/easydispatch;DB_CLOSE_DELAY=-1;AUTO_SERVER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  # 邮件 SMTP 配置（未配置时自动走 Mock 模式，仅打印日志）
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    protocol: ${MAIL_PROTOCOL:smtp}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+        debug: false
+
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 2GB
+      max-request-size: 2GB
+      file-size-threshold: 10MB
+
+# EasyDispatch 自定义配置
+easydispatch:
+  # 文件存储根目录
+  storage:
+    root: ${STORAGE_ROOT:./data/attachments}
+  # 发件人邮箱（未配置 SMTP 时仅作日志展示）
+  mail:
+    from: ${MAIL_FROM:noreply@easydispatch.local}
+    # Mock 模式：true=仅打印日志不实际发送；false=走真实 SMTP
+    mock: ${MAIL_MOCK:true}
+  # 单文件大小上限（字节），默认 2GB
+  upload:
+    max-file-size: 2147483648
+
+logging:
+  level:
+    com.easydispatch: INFO
+    org.hibernate.SQL: WARN

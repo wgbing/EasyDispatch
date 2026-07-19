@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>模板管理 - EasyDispatch</title>
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <div class="topbar">
+    <div class="logo"><span class="icon">📦</span>EasyDispatch</div>
+    <div class="nav">
+      <a href="/">首页</a>
+      <a href="/dispatch">发货工作台</a>
+      <a href="/templates" class="active">模板管理</a>
+    </div>
+    <div class="user">用户: Admin</div>
+  </div>
+
+  <div class="banner-offline" id="offlineBanner" style="display:none;">
+    ⚠️ 系统连接断开，请检查网络
+  </div>
+
+  <div class="container">
+    <div class="row" style="margin-bottom: 20px;">
+      <div class="page-title" style="margin: 0;">🗂️ 模板管理中心</div>
+      <button class="btn-primary" style="width: auto; padding: 8px 20px; font-size: 14px;" onclick="openCreateForm()">+ 新建模板</button>
+    </div>
+
+    <!-- 新建/编辑模板表单 -->
+    <div id="templateForm" style="display:none; border: 1px solid #eceff1; border-radius: 10px; padding: 24px; margin-bottom: 24px; background: #fafafa;">
+      <input type="hidden" id="formId">
+      <div class="field">
+        <label>模板名称</label>
+        <input type="text" id="formName" placeholder="例如：Photoshop 2024 正版激活码">
+      </div>
+      <div class="field">
+        <label>邮件主题</label>
+        <input type="text" id="formSubject" placeholder="发货通知：您购买的商品已发货">
+      </div>
+      <div class="field">
+        <label>邮件正文</label>
+        <textarea id="formBody" placeholder="亲，您好！&#10;感谢购买本店商品。&#10;附件是您的软件安装包，请查收。"></textarea>
+      </div>
+
+      <!-- 附件上传区（仅编辑已有模板时显示） -->
+      <div id="attachmentSection" style="display:none;">
+        <label style="display:block; font-size: 14px; font-weight: 600; margin-bottom: 6px; color: #455a64;">
+          绑定商品附件
+        </label>
+        <div class="upload-zone" id="uploadZone">
+          <div class="upload-icon">📎</div>
+          <div class="upload-text">点击上传文件 或 拖拽文件到此处</div>
+          <div class="upload-progress" style="display:none;" id="uploadProgress">
+            <div class="upload-progress-bar" id="uploadProgressBar"></div>
+          </div>
+          <input type="file" id="fileInput" style="display:none;" multiple>
+        </div>
+
+        <div style="font-size: 12px; color: #90a4ae; margin: 8px 0;">
+          单文件限制 2GB
+        </div>
+
+        <div class="attachment-list" id="attachmentList"></div>
+      </div>
+
+      <div class="row" style="margin-top: 16px;">
+        <button class="btn-primary" style="width: auto; padding: 10px 24px;" onclick="saveTemplate()">保存模板</button>
+        <button class="btn-secondary" onclick="closeForm()">取消</button>
+      </div>
+    </div>
+
+    <!-- 模板列表 -->
+    <div class="template-list" id="templateList">
+      <div class="empty-state">
+        <div class="icon">📂</div>
+        <div>暂无模板，点击上方"新建模板"开始</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    let currentEditing = null;
+    let currentTemplateVO = null;
+
+    function escapeHtml(s) {
+      if (!s) return '';
+      return String(s).replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      })[c]);
+    }
+
+    async function loadTemplates() {
+      try {
+        const list = await API.get('/api/templates');
+        const container = document.getElementById('templateList');
+        if (list.length === 0) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <div class="icon">📂</div>
+              <div>暂无模板，点击上方"新建模板"开始</div>
+            </div>`;
+          return;
+        }
+        container.innerHTML = list.map(t => {
+          const attachBadge = t.attachments.length > 0
+            ? `<span class="badge has-attach">📎 ${t.attachments.length} 个附件</span>`
+            : `<span class="badge no-attach">无附件</span>`;
+          const healthBadge = !t.attachmentsHealthy
+            ? `<span class="badge warning">⚠️ 附件丢失</span>` : '';
+          const attachmentsHtml = t.attachments.map(a => `
+            <div class="attachment-item">
+              <span class="icon ${fileIconClass(a.fileType)}">${fileIconEmoji(a.fileType)}</span>
+              <span class="name">${escapeHtml(a.originalName)}</span>
+              <span class="size">${humanSize(a.fileSize)}</span>
+            </div>
+          `).join('');
+
+          return `
+            <div class="template-card">
+              <div class="card-header">
+                <div class="card-title">${escapeHtml(t.name)}</div>
+                <div class="card-actions">
+                  <button class="btn-secondary" onclick="editTemplate(${t.id})">编辑</button>
+                  <button class="btn-danger" onclick="deleteTemplate(${t.id}, '${escapeHtml(t.name)}')">删除</button>
+                </div>
+              </div>
+              <div class="card-subject">📧 ${escapeHtml(t.emailSubject)}</div>
+              <div style="margin: 8px 0;">${attachBadge} ${healthBadge}</div>
+              <div style="font-size: 12px; color: #607d8b; margin-top: 6px;">
+                ${escapeHtml(t.emailBody.substring(0, 80))}${t.emailBody.length > 80 ? '...' : ''}
+              </div>
+              ${attachmentsHtml ? `<div class="attachment-list" style="margin-top: 8px;">${attachmentsHtml}</div>` : ''}
+            </div>
+          `;
+        }).join('');
+        checkBackendHealth();
+      } catch (e) {
+        showToast('加载失败: ' + (e.message || '未知错误'), 'error');
+      }
+    }
+
+    function openCreateForm() {
+      currentEditing = null;
+      currentTemplateVO = null;
+      document.getElementById('formId').value = '';
+      document.getElementById('formName').value = '';
+      document.getElementById('formSubject').value = '';
+      document.getElementById('formBody').value = '';
+      document.getElementById('attachmentSection').style.display = 'none';
+      document.getElementById('templateForm').style.display = 'block';
+      document.getElementById('formName').focus();
+    }
+
+    function closeForm() {
+      document.getElementById('templateForm').style.display = 'none';
+      currentEditing = null;
+      currentTemplateVO = null;
+    }
+
+    async function editTemplate(id) {
+      try {
+        const t = await API.get('/api/templates/' + id);
+        currentEditing = id;
+        currentTemplateVO = t;
+        document.getElementById('formId').value = t.id;
+        document.getElementById('formName').value = t.name;
+        document.getElementById('formSubject').value = t.emailSubject;
+        document.getElementById('formBody').value = t.emailBody;
+        document.getElementById('attachmentSection').style.display = 'block';
+        document.getElementById('templateForm').style.display = 'block';
+        renderAttachmentList(t.attachments);
+        document.getElementById('templateForm').scrollIntoView({behavior: 'smooth'});
+      } catch (e) {
+        showToast('加载模板失败: ' + (e.message || '未知错误'), 'error');
+      }
+    }
+
+    function renderAttachmentList(attachments) {
+      const container = document.getElementById('attachmentList');
+      if (!attachments || attachments.length === 0) {
+        container.innerHTML = '<div style="font-size: 12px; color: #90a4ae; padding: 8px;">尚未绑定任何附件</div>';
+        return;
+      }
+      container.innerHTML = attachments.map(a => `
+        <div class="attachment-item">
+          <span class="icon ${fileIconClass(a.fileType)}">${fileIconEmoji(a.fileType)}</span>
+          <span class="name">${escapeHtml(a.originalName)}</span>
+          <span class="size">${humanSize(a.fileSize)}</span>
+          <button class="btn-danger" onclick="removeAttachment(${a.id}, '${escapeHtml(a.originalName)}')">删除</button>
+        </div>
+      `).join('');
+    }
+
+    async function saveTemplate() {
+      const name = document.getElementById('formName').value.trim();
+      const subject = document.getElementById('formSubject').value.trim();
+      const body = document.getElementById('formBody').value.trim();
+      if (!name || !subject || !body) {
+        showToast('请填写完整: 名称、主题、正文', 'error');
+        return;
+      }
+      const payload = { name, emailSubject: subject, emailBody: body };
+      try {
+        if (currentEditing) {
+          await API.put('/api/templates/' + currentEditing, payload);
+          showToast('模板已更新', 'success');
+          // 刷新当前编辑模板的附件列表
+          await editTemplate(currentEditing);
+        } else {
+          const created = await API.post('/api/templates', payload);
+          showToast('模板已创建', 'success');
+          // 创建完成后切换到编辑模式，可上传附件
+          await editTemplate(created.id);
+        }
+        loadTemplates();
+      } catch (e) {
+        showToast('保存失败: ' + (e.message || '未知错误'), 'error');
+      }
+    }
+
+    async function deleteTemplate(id, name) {
+      if (!confirm(`确认删除模板「${name}」？\n关联的附件文件也会被一并删除。`)) return;
+      try {
+        await API.delete('/api/templates/' + id);
+        showToast('模板已删除', 'success');
+        if (currentEditing === id) closeForm();
+        loadTemplates();
+      } catch (e) {
+        showToast('删除失败: ' + (e.message || '未知错误'), 'error');
+      }
+    }
+
+    async function removeAttachment(id, name) {
+      if (!confirm(`确认删除附件「${name}」？`)) return;
+      try {
+        await API.delete('/api/attachments/' + id);
+        showToast('附件已删除', 'success');
+        if (currentEditing) await editTemplate(currentEditing);
+        loadTemplates();
+      } catch (e) {
+        showToast('删除失败: ' + (e.message || '未知错误'), 'error');
+      }
+    }
+
+    // 文件上传
+    const uploadZone = document.getElementById('uploadZone');
+    const fileInput = document.getElementById('fileInput');
+
+    uploadZone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) uploadFile(e.target.files[0]);
+    });
+
+    uploadZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadZone.classList.add('dragover');
+    });
+    uploadZone.addEventListener('dragleave', () => {
+      uploadZone.classList.remove('dragover');
+    });
+    uploadZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadZone.classList.remove('dragover');
+      if (e.dataTransfer.files.length > 0) uploadFile(e.dataTransfer.files[0]);
+    });
+
+    async function uploadFile(file) {
+      if (!currentEditing) {
+        showToast('请先保存模板再上传附件', 'error');
+        return;
+      }
+      const progress = document.getElementById('uploadProgress');
+      const progressBar = document.getElementById('uploadProgressBar');
+      progress.style.display = 'block';
+      progressBar.style.width = '0%';
+
+      try {
+        const result = await uploadWithProgress(
+          '/api/templates/' + currentEditing + '/attachments',
+          file,
+          (pct) => { progressBar.style.width = pct + '%'; }
+        );
+        showToast(`附件「${file.name}」上传成功`, 'success');
+        await editTemplate(currentEditing);
+        loadTemplates();
+      } catch (e) {
+        showToast('上传失败: ' + (e.message || '未知错误'), 'error');
+      } finally {
+        progress.style.display = 'none';
+        progressBar.style.width = '0%';
+        fileInput.value = '';
+      }
+    }
+
+    loadTemplates();
+  </script>
+</body>
+</html>
