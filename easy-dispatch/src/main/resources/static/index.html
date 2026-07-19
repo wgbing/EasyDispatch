@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EasyDispatch - 极简发货系统</title>
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <div class="topbar">
+    <div class="logo"><span class="icon">📦</span>EasyDispatch</div>
+    <div class="nav">
+      <a href="/" class="active">首页</a>
+      <a href="/dispatch">发货工作台</a>
+      <a href="/templates">模板管理</a>
+    </div>
+    <div class="user">用户: Admin</div>
+  </div>
+
+  <div class="banner-offline" id="offlineBanner" style="display:none;">
+    ⚠️ 系统连接断开，请检查网络
+  </div>
+
+  <div class="container">
+    <div class="page-title">欢迎使用 EasyDispatch</div>
+    <p style="line-height: 1.8; color: #455a64; margin-bottom: 24px;">
+      极简发货系统 —— <strong>模板预绑定附件</strong>，发货只需输入邮箱、选模板、点发送。
+    </p>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 24px;">
+      <a href="/dispatch" style="text-decoration: none;">
+        <div style="padding: 24px; background: linear-gradient(135deg, #1e88e5, #1565c0); color: white; border-radius: 12px; text-align: center;">
+          <div style="font-size: 36px;">🚀</div>
+          <div style="font-size: 18px; font-weight: 700; margin-top: 8px;">发货工作台</div>
+          <div style="font-size: 12px; opacity: 0.9; margin-top: 4px;">3秒完成一次发货</div>
+        </div>
+      </a>
+      <a href="/templates" style="text-decoration: none;">
+        <div style="padding: 24px; background: linear-gradient(135deg, #ff9800, #ef6c00); color: white; border-radius: 12px; text-align: center;">
+          <div style="font-size: 36px;">🗂️</div>
+          <div style="font-size: 18px; font-weight: 700; margin-top: 8px;">模板管理中心</div>
+          <div style="font-size: 12px; opacity: 0.9; margin-top: 4px;">配置商品模板与附件</div>
+        </div>
+      </a>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>checkBackendHealth();</script>
+</body>
+</html>
