@@ -1,9 +1,14 @@
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
 
 spring:
   application:
     name: easy-dispatch
+
+  # 读取项目根目录下的 .env 文件（如果存在），与 Docker Compose 共用一份配置
+  # 格式说明：.env 用 "KEY=VALUE" 写法，这里按 properties 格式解析
+  config:
+    import: optional:file:.env[.properties]
 
   # H2 内存数据库（原型阶段，可切换 MySQL）
   datasource:
@@ -24,18 +29,32 @@ spring:
         format_sql: true
 
   # 邮件 SMTP 配置（未配置时自动走 Mock 模式，仅打印日志）
+  # 163 邮箱推荐：MAIL_PORT=465, MAIL_SSL_ENABLE=true
+  # 587/STARTTLS：MAIL_PORT=587, MAIL_STARTTLS_ENABLE=true, MAIL_SSL_ENABLE=false
   mail:
-    host: ${MAIL_HOST:}
-    port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:}
-    password: ${MAIL_PASSWORD:}
+    host: ${MAIL_HOST:smtp.163.com}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:jeecglic@163.com}
+    password: ${MAIL_PASSWORD:MCUNGTDJVJZYRYPQ}
     protocol: ${MAIL_PROTOCOL:smtp}
     properties:
       mail:
         smtp:
           auth: true
+          # SSL（465 端口推荐开启）
+          ssl:
+            enable: ${MAIL_SSL_ENABLE:true}
+            socketFactory:
+              class: javax.net.ssl.SSLSocketFactory
+              port: ${MAIL_PORT:465}
+          # STARTTLS（587 端口开启）
           starttls:
-            enable: true
+            enable: ${MAIL_STARTTLS_ENABLE:false}
+          # 部分 SMTP 服务器需要校验发件人身份
+          ssl.trust: ${MAIL_HOST:smtp.163.com}
+          connectiontimeout: 5000
+          timeout: 10000
+          writetimeout: 10000
         debug: false
 
   servlet:
@@ -54,7 +73,7 @@ easydispatch:
   mail:
     from: ${MAIL_FROM:noreply@easydispatch.local}
     # Mock 模式：true=仅打印日志不实际发送；false=走真实 SMTP
-    mock: ${MAIL_MOCK:true}
+    mock: ${MAIL_MOCK:false}
   # 单文件大小上限（字节），默认 2GB
   upload:
     max-file-size: 2147483648
